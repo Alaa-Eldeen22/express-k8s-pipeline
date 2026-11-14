@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp
+  labels:
+    app: myapp
+spec:
+  # NodePort to make it easily accessible in Minikube via the host IP
+  type: NodePort
+  selector:
+    app: myapp
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP

@@ -1,0 +1,89 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: myapp
+  labels:
+    app: myapp
+
+spec:
+  # spec.replicas is intentionally omitted so the HPA can manage it
+
+  selector:
+    matchLabels:
+      app: myapp
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  template:
+    metadata:
+      labels:
+        app: myapp
+
+    spec:
+      # Credentials for the private registry
+      imagePullSecrets:
+        - name: regcred
+
+      # Give the app time to finish in-flight requests on SIGTERM
+      terminationGracePeriodSeconds: 30
+
+      # Pod-level hardening
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000 # the "node" user in the node:alpine image
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: myapp
+
+          # IMAGE_PLACEHOLDER is replaced with the commit-SHA tag by the CI/CD pipeline
+          # before the manifests are applied (see .github/workflows/ci-cd.yaml)
+          image: IMAGE_PLACEHOLDER
+          imagePullPolicy: IfNotPresent
+
+          # Container-level hardening
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+          ports:
+            - name: http
+              containerPort: 3000
+
+          # Load all keys from the ConfigMap as environment variables
+          envFrom:
+            - configMapRef:
+                name: myapp-config
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+
+          # Restart the container if it becomes unhealthy
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          # Only route traffic to the container once it is ready
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
